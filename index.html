@@ -241,6 +241,8 @@
     return data;
   }
 
+  function siNo(bool){ return bool ? 'Sí' : 'No'; }
+
   function defaultConfig(){
     return {
       equipos: [
@@ -266,12 +268,12 @@
 
       entries = (data.entries || []).map(row => ({
         id: row.ID,
-        equipoId: row.Equipo || '',
+        equipoId: row.EquipoId || '',
         fecha: row.Fecha ? String(row.Fecha).slice(0,10) : '',
         socio: row.Socio || '',
-        contactado: row.Contactado === true,
-        acuerdo: row.Acuerdo === true,
-        recuperado: row.Recuperado === true,
+        contactado: row.Contactado === 'Sí',
+        acuerdo: row.Acuerdo === 'Sí',
+        recuperado: row.Recuperado === 'Sí',
         monto: Number(row.Monto) || 0,
         nota: row.Nota || '',
         registradoPor: row.RegistradoPor || '',
@@ -705,13 +707,15 @@
           ts: Date.now()
         };
         try{
+          const equipo = (config.equipos || []).find(eq => eq.id === entry.equipoId);
           const result = await apiCall('create', { fields: {
-            equipo: entry.equipoId,
+            equipoId: entry.equipoId,
+            equipoNombre: equipo ? equipo.nombre : entry.equipoId,
             fecha: entry.fecha,
             socio: entry.socio,
-            contactado: entry.contactado,
-            acuerdo: entry.acuerdo,
-            recuperado: entry.recuperado,
+            contactado: siNo(entry.contactado),
+            acuerdo: siNo(entry.acuerdo),
+            recuperado: siNo(entry.recuperado),
             monto: entry.monto,
             nota: entry.nota,
             registradoPor: entry.registradoPor
