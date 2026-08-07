@@ -246,11 +246,10 @@
   function defaultConfig(){
     return {
       equipos: [
-        { id:'e1', nombre:'Embarcación Halcón del Mar', capitan:'Por definir', color:'#128C1E' },
-        { id:'e2', nombre:'Embarcación Sirena Veloz', capitan:'Por definir', color:'#E8B923' },
-        { id:'e3', nombre:'Embarcación Tridente', capitan:'Por definir', color:'#D32B26' }
+        { id:'e1', nombre:'Embarcación Halcón del Mar', capitan:'Por definir', color:'#128C1E', metas:{ castigada:5000, sinCastigar:5000 } },
+        { id:'e2', nombre:'Embarcación Sirena Veloz', capitan:'Por definir', color:'#E8B923', metas:{ castigada:5000, sinCastigar:5000 } },
+        { id:'e3', nombre:'Embarcación Tridente', capitan:'Por definir', color:'#D32B26', metas:{ castigada:5000, sinCastigar:5000 } }
       ],
-      meta: { monto:10000, acuerdos:30, recuperados:15, contactos:100 },
       fechaInicio: new Date().toISOString().slice(0,10)
     };
   }
@@ -264,7 +263,8 @@
         config = defaultConfig();
         await persistConfig();
       }
-      if(!config.meta.recuperados && config.meta.socios){ config.meta.recuperados = config.meta.socios; }
+      if(!config.equipos) config.equipos = defaultConfig().equipos;
+      config.equipos.forEach(eq=>{ if(!eq.metas) eq.metas = { castigada:5000, sinCastigar:5000 }; });
 
       entries = (data.entries || []).map(row => ({
         id: row.ID,
@@ -275,6 +275,7 @@
         acuerdo: row.Acuerdo === 'Sí',
         recuperado: row.Recuperado === 'Sí',
         monto: Number(row.Monto) || 0,
+        categoria: row.Categoria || '',
         nota: row.Nota || '',
         registradoPor: row.RegistradoPor || '',
         ts: row.Timestamp ? new Date(row.Timestamp).getTime() : Date.now()
@@ -317,7 +318,9 @@
   /* ---------- CÁLCULOS ---------- */
   function totalesEquipo(equipoId){
     const es = entries.filter(e=>e.equipoId===equipoId);
-    const monto = es.reduce((a,e)=> a + (Number(e.monto)||0), 0);
+    const montoCastigada = es.filter(e=>e.categoria==='Castigada').reduce((a,e)=> a + (Number(e.monto)||0), 0);
+    const montoSinCastigar = es.filter(e=>e.categoria==='Sin Castigar').reduce((a,e)=> a + (Number(e.monto)||0), 0);
+    const monto = montoCastigada + montoSinCastigar;
     const contactos = es.filter(e=>e.contactado).length;
     const casos = {};
     es.forEach(e=>{
@@ -329,22 +332,21 @@
     });
     const acuerdos = Object.values(casos).filter(c=>c.acuerdo).length;
     const recuperados = Object.values(casos).filter(c=>c.recuperado).length;
-    return { monto, contactos, acuerdos, recuperados };
+    return { monto, montoCastigada, montoSinCastigar, contactos, acuerdos, recuperados };
   }
 
-  function avanceEquipo(totales){
-    const m = config.meta;
-    const pMonto = m.monto ? Math.min(100,(totales.monto/m.monto)*100) : 0;
-    const pAc = m.acuerdos ? Math.min(100,(totales.acuerdos/m.acuerdos)*100) : 0;
-    const pRe = m.recuperados ? Math.min(100,(totales.recuperados/m.recuperados)*100) : 0;
-    const pCo = m.contactos ? Math.min(100,(totales.contactos/m.contactos)*100) : 0;
-    return Math.min(100, pMonto*0.4 + pAc*0.25 + pRe*0.25 + pCo*0.10);
+  function avanceEquipo(eq, totales){
+    const metas = eq.metas || { castigada:1, sinCastigar:1 };
+    const pCastigada = metas.castigada ? Math.min(100,(totales.montoCastigada/metas.castigada)*100) : 0;
+    const pSinCastigar = metas.sinCastigar ? Math.min(100,(totales.montoSinCastigar/metas.sinCastigar)*100) : 0;
+    return { avance: Math.min(100, (pCastigada + pSinCastigar) / 2), pCastigada, pSinCastigar };
   }
 
   function rankingEquipos(){
     return config.equipos.map(eq=>{
       const tot = totalesEquipo(eq.id);
-      return { ...eq, totales:tot, avance:avanceEquipo(tot) };
+      const av = avanceEquipo(eq, tot);
+      return { ...eq, totales:tot, avance:av.avance, pCastigada:av.pCastigada, pSinCastigar:av.pSinCastigar };
     }).sort((a,b)=> b.avance - a.avance);
   }
 
@@ -415,6 +417,7 @@
         ${filtroSoloHoy ? '' : `<td>${e.fecha}</td>`}
         <td><span class="team-tag" style="color:${color}"><span class="dot" style="background:${color}"></span>${eq?esc(eq.nombre.replace('Embarcación ','')):'—'}</span></td>
         <td><span class="socio-num">${esc(e.socio)||'—'}</span></td>
+        <td>${e.categoria ? `<span style="font-size:12px;">${e.categoria==='Castigada'?'Castigada':'Sin castigar'}</span>` : '—'}</td>
         <td>${badges || '<span style="color:var(--ink-soft);font-size:12px;">Sin estado</span>'}</td>
         <td>${fmtMoney(e.monto)}</td>
         <td>${esc(e.registradoPor)||'—'}</td>
@@ -457,6 +460,13 @@
               <input type="number" id="f-monto" min="0" step="0.01" placeholder="0">
             </div>
             <div>
+              <label>Categoría de cartera</label>
+              <select id="f-categoria" required>
+                <option value="Castigada">Cartera castigada</option>
+                <option value="Sin Castigar">Cartera sin castigar</option>
+              </select>
+            </div>
+            <div>
               <label>Registrado por</label>
               <input type="text" id="f-nombre" placeholder="Tu nombre">
             </div>
@@ -483,7 +493,7 @@
         ${rows ? `
           <div class="log-wrap">
           <table class="log">
-            <thead><tr>${filtroSoloHoy?'':'<th>Fecha</th>'}<th>Embarcación</th><th>N° de socio</th><th>Estado</th><th>Monto</th><th>Registró</th><th></th></tr></thead>
+            <thead><tr>${filtroSoloHoy?'':'<th>Fecha</th>'}<th>Embarcación</th><th>N° de socio</th><th>Categoría</th><th>Estado</th><th>Monto</th><th>Registró</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
           </div>
@@ -514,14 +524,26 @@
     const cards = ranking.map((eq,i)=>{
       const medals = ['🥇','🥈','🥉'];
       const lastEntry = entries.filter(e=>e.equipoId===eq.id).sort((a,b)=>b.ts-a.ts)[0];
+      const metas = eq.metas || { castigada:0, sinCastigar:0 };
       return `
         <div class="team-card" style="border-top-color:${eq.color}">
           <p class="tname"><span class="medal">${medals[i]||''}</span>${esc(eq.nombre)}</p>
           <p class="tcapt">Capitán/a: ${esc(eq.capitan)}</p>
           <p class="pct" style="color:${eq.color}">${Math.round(eq.avance)}%</p>
           <div class="bar-bg"><div class="bar-fill" style="width:${eq.avance}%; background:${eq.color}"></div></div>
-          <div class="mini-stats">
-            <span>💰 ${fmtMoney(eq.totales.monto)}</span>
+          <div style="margin-top:10px;">
+            <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px;">
+              <span>Cartera castigada</span><span style="font-family:'IBM Plex Mono',monospace;">${fmtMoney(eq.totales.montoCastigada)} / ${fmtMoney(metas.castigada)}</span>
+            </div>
+            <div class="bar-bg" style="height:8px;"><div class="bar-fill" style="width:${eq.pCastigada}%; background:${eq.color}; opacity:0.75;"></div></div>
+          </div>
+          <div style="margin-top:8px;">
+            <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px;">
+              <span>Cartera sin castigar</span><span style="font-family:'IBM Plex Mono',monospace;">${fmtMoney(eq.totales.montoSinCastigar)} / ${fmtMoney(metas.sinCastigar)}</span>
+            </div>
+            <div class="bar-bg" style="height:8px;"><div class="bar-fill" style="width:${eq.pSinCastigar}%; background:${eq.color}; opacity:0.5;"></div></div>
+          </div>
+          <div class="mini-stats" style="margin-top:10px;">
             <span>🤝 ${eq.totales.acuerdos} acuerdos</span>
             <span>✅ ${eq.totales.recuperados} recuperados</span>
             <span>📞 ${eq.totales.contactos} contactos</span>
@@ -533,7 +555,7 @@
     return `
       <div class="panel map-card">
         <h2>Ruta hacia Puerto Victoria</h2>
-        <p class="desc">La posición de cada embarcación combina monto recuperado, acuerdos de pago, casos recuperados y contactos efectivos.</p>
+        <p class="desc">La posición de cada embarcación es el promedio de su avance en cartera castigada y cartera sin castigar, cada una con su propia meta.</p>
         <svg viewBox="0 0 1000 300" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -567,11 +589,12 @@
     entries.forEach(e=>{
       const wk = getISOWeekLabel(e.fecha);
       if(!weekMap[wk]) weekMap[wk] = {};
-      config.equipos.forEach(eq=>{ if(!weekMap[wk][eq.id]) weekMap[wk][eq.id] = {monto:0,acuerdos:0,recuperados:0,contactos:0}; });
+      config.equipos.forEach(eq=>{ if(!weekMap[wk][eq.id]) weekMap[wk][eq.id] = {montoCastigada:0,montoSinCastigar:0,acuerdos:0,recuperados:0,contactos:0}; });
       if(e.contactado) weekMap[wk][e.equipoId].contactos += 1;
       if(e.acuerdo) weekMap[wk][e.equipoId].acuerdos += 1;
       if(e.recuperado) weekMap[wk][e.equipoId].recuperados += 1;
-      weekMap[wk][e.equipoId].monto += Number(e.monto)||0;
+      if(e.categoria==='Castigada') weekMap[wk][e.equipoId].montoCastigada += Number(e.monto)||0;
+      if(e.categoria==='Sin Castigar') weekMap[wk][e.equipoId].montoSinCastigar += Number(e.monto)||0;
     });
     const weeks = Object.keys(weekMap).sort();
 
@@ -583,8 +606,8 @@
         weekRows += `<tr>
           <td><b>${wk}</b></td>
           ${config.equipos.map(eq=>{
-            const d = weekMap[wk][eq.id] || {monto:0,acuerdos:0,recuperados:0,contactos:0};
-            return `<td>${fmtMoney(d.monto)} · ${d.acuerdos} acuerdos · ${d.recuperados} recup.</td>`;
+            const d = weekMap[wk][eq.id] || {montoCastigada:0,montoSinCastigar:0,acuerdos:0,recuperados:0,contactos:0};
+            return `<td>Cast.: ${fmtMoney(d.montoCastigada)} · S/Cast.: ${fmtMoney(d.montoSinCastigar)}</td>`;
           }).join('')}
         </tr>`;
       });
@@ -593,7 +616,7 @@
     const orderedRanking = config.equipos.map(eq=> ranking.find(r=>r.id===eq.id));
     const totalRow = `<tr>
       <td>Total acumulado</td>
-      ${orderedRanking.map(eq=>`<td>${fmtMoney(eq.totales.monto)} · ${eq.totales.acuerdos} acuerdos · ${eq.totales.recuperados} recup.</td>`).join('')}
+      ${orderedRanking.map(eq=>`<td>Cast.: ${fmtMoney(eq.totales.montoCastigada)} · S/Cast.: ${fmtMoney(eq.totales.montoSinCastigar)}</td>`).join('')}
     </tr>`;
 
     const barRows = ranking.map(eq=>`
@@ -637,6 +660,7 @@
       'Fecha': e.fecha,
       'Embarcación': teamName(e.equipoId),
       'N° de socio': e.socio || '',
+      'Categoría': e.categoria || '',
       'Contactado': e.contactado ? 'Sí' : 'No',
       'Acuerdo de pago': e.acuerdo ? 'Sí' : 'No',
       'Recuperado': e.recuperado ? 'Sí' : 'No',
@@ -650,14 +674,13 @@
       'Embarcación': eq.nombre,
       'Capitán/a': eq.capitan,
       'Avance (%)': Math.round(eq.avance),
-      'Monto recuperado': eq.totales.monto,
-      'Meta de monto': config.meta.monto,
+      'Monto cartera castigada': eq.totales.montoCastigada,
+      'Meta cartera castigada': (eq.metas||{}).castigada || 0,
+      'Monto cartera sin castigar': eq.totales.montoSinCastigar,
+      'Meta cartera sin castigar': (eq.metas||{}).sinCastigar || 0,
       'Acuerdos de pago': eq.totales.acuerdos,
-      'Meta de acuerdos': config.meta.acuerdos,
       'Casos recuperados': eq.totales.recuperados,
-      'Meta de recuperados': config.meta.recuperados,
-      'Contactos efectivos': eq.totales.contactos,
-      'Meta de contactos': config.meta.contactos
+      'Contactos efectivos': eq.totales.contactos
     }));
 
     const wb = XLSX.utils.book_new();
@@ -702,6 +725,7 @@
           acuerdo: document.getElementById('f-acuerdo').checked,
           recuperado: document.getElementById('f-recuperado').checked,
           monto: parseFloat(document.getElementById('f-monto').value)||0,
+          categoria: document.getElementById('f-categoria').value,
           nota: document.getElementById('f-nota').value,
           registradoPor: document.getElementById('f-nombre').value,
           ts: Date.now()
@@ -717,6 +741,7 @@
             acuerdo: siNo(entry.acuerdo),
             recuperado: siNo(entry.recuperado),
             monto: entry.monto,
+            categoria: entry.categoria,
             nota: entry.nota,
             registradoPor: entry.registradoPor
           }});
@@ -781,22 +806,21 @@
         <h2>⚙️ Configurar la regata</h2>
         <p class="desc">Nombres de embarcaciones, capitanes y metas hacia Puerto Victoria.</p>
         <div id="teams-edit">
-          ${config.equipos.map((eq)=>`
+          ${config.equipos.map((eq)=>{
+            const metas = eq.metas || { castigada:0, sinCastigar:0 };
+            return `
             <div class="team-edit-row">
               <div class="swatch" style="background:${eq.color}"></div>
               <input type="text" data-team-name="${eq.id}" value="${esc(eq.nombre)}" placeholder="Nombre de la embarcación">
               <input type="text" data-team-capt="${eq.id}" value="${esc(eq.capitan)}" placeholder="Capitán/a">
             </div>
-          `).join('')}
+            <div class="field-row" style="margin:0 0 14px;">
+              <div><label>Meta cartera castigada ($)</label><input type="number" data-team-meta-castigada="${eq.id}" value="${metas.castigada}"></div>
+              <div><label>Meta cartera sin castigar ($)</label><input type="number" data-team-meta-sincastigar="${eq.id}" value="${metas.sinCastigar}"></div>
+            </div>
+          `;}).join('')}
         </div>
         <hr class="sep">
-        <p class="desc" style="margin-bottom:8px;"><b>Metas por embarcación</b> (100% de avance)</p>
-        <div class="field-row">
-          <div><label>Monto recuperado ($)</label><input type="number" id="m-monto" value="${config.meta.monto}"></div>
-          <div><label>Acuerdos de pago</label><input type="number" id="m-acuerdos" value="${config.meta.acuerdos}"></div>
-          <div><label>Casos recuperados</label><input type="number" id="m-recuperados" value="${config.meta.recuperados}"></div>
-          <div><label>Contactos efectivos</label><input type="number" id="m-contactos" value="${config.meta.contactos}"></div>
-        </div>
         <label>Fecha de inicio de la regata</label>
         <input type="date" id="m-fecha" value="${config.fechaInicio}">
         <div class="modal-actions">
@@ -817,13 +841,14 @@
       config.equipos.forEach(eq=>{
         const nameInput = backdrop.querySelector(`[data-team-name="${eq.id}"]`);
         const captInput = backdrop.querySelector(`[data-team-capt="${eq.id}"]`);
+        const metaCastInput = backdrop.querySelector(`[data-team-meta-castigada="${eq.id}"]`);
+        const metaSinInput = backdrop.querySelector(`[data-team-meta-sincastigar="${eq.id}"]`);
         if(nameInput.value.trim()) eq.nombre = nameInput.value.trim();
         eq.capitan = captInput.value.trim() || 'Por definir';
+        if(!eq.metas) eq.metas = {};
+        eq.metas.castigada = parseFloat(metaCastInput.value)||1;
+        eq.metas.sinCastigar = parseFloat(metaSinInput.value)||1;
       });
-      config.meta.monto = parseFloat(backdrop.querySelector('#m-monto').value)||1;
-      config.meta.acuerdos = parseFloat(backdrop.querySelector('#m-acuerdos').value)||1;
-      config.meta.recuperados = parseFloat(backdrop.querySelector('#m-recuperados').value)||1;
-      config.meta.contactos = parseFloat(backdrop.querySelector('#m-contactos').value)||1;
       config.fechaInicio = backdrop.querySelector('#m-fecha').value || config.fechaInicio;
       await persistConfig();
       showToast('Configuración guardada');
