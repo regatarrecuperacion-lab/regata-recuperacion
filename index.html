@@ -1,3 +1,10 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>La Regata de la Recuperación · COAC Agrícola Junín</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -184,7 +191,41 @@
     .panel{ padding:18px; }
     nav.tabs button{ padding:9px 13px; font-size:13px; }
   }
+
+  #lock-screen{
+    position:fixed; inset:0; z-index:9999; background:var(--navy-deep);
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  #lock-card{
+    max-width:380px; width:100%; background:var(--parchment); border-radius:14px;
+    padding:32px 28px; text-align:center; box-shadow:var(--shadow);
+  }
+  #lock-card .kicker{ font-size:12px; font-weight:700; letter-spacing:2px; color:var(--brass-text); margin-bottom:6px; }
+  #lock-card h2{ font-family:'Fraunces',serif; font-size:22px; margin:0 0 10px; color:var(--ink); }
+  #lock-card p{ font-size:13.5px; color:var(--ink-soft); margin:0 0 20px; line-height:1.4; }
+  #lock-password{
+    width:100%; padding:11px 14px; border-radius:9px; border:1px solid rgba(0,0,0,0.15);
+    font-size:15px; margin-bottom:12px; box-sizing:border-box; text-align:center; letter-spacing:2px;
+  }
+  #lock-submit{
+    width:100%; padding:11px 14px; border-radius:9px; border:none; background:var(--navy-deep);
+    color:#fff; font-weight:600; font-size:14px; cursor:pointer;
+  }
+  #lock-error{ color:var(--coral); font-size:12.5px; margin-top:10px; display:none; }
 </style>
+</head>
+<body>
+
+<div id="lock-screen">
+  <div id="lock-card">
+    <p class="kicker">⚓ CUADERNO DE BITÁCORA</p>
+    <h2>Acceso restringido</h2>
+    <p>Esta herramienta es de uso interno de COAC Agrícola Junín. Ingresa la contraseña que te compartió tu coordinador/a.</p>
+    <input type="password" id="lock-password" placeholder="Contraseña" autocomplete="off">
+    <button id="lock-submit">Entrar</button>
+    <p id="lock-error">Contraseña incorrecta. Intenta de nuevo.</p>
+  </div>
+</div>
 
 <div class="wrap" id="app">
   <header class="top">
@@ -214,6 +255,33 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
+  /* ---------- CANDADO DE ACCESO ---------- */
+  (function(){
+    const APP_PASSWORD = 'junin-regata-2026';
+    const SESSION_KEY = 'regata_unlocked_v1';
+    const lockScreen = document.getElementById('lock-screen');
+    if(sessionStorage.getItem(SESSION_KEY) === 'si'){
+      lockScreen.remove();
+      return;
+    }
+    const input = document.getElementById('lock-password');
+    const btn = document.getElementById('lock-submit');
+    const err = document.getElementById('lock-error');
+    function tryUnlock(){
+      if(input.value === APP_PASSWORD){
+        sessionStorage.setItem(SESSION_KEY, 'si');
+        lockScreen.remove();
+      } else {
+        err.style.display = 'block';
+        input.value = '';
+        input.focus();
+      }
+    }
+    btn.addEventListener('click', tryUnlock);
+    input.addEventListener('keydown', (e)=>{ if(e.key==='Enter') tryUnlock(); });
+    input.focus();
+  })();
+
 (function(){
 
   let config = null;
@@ -226,7 +294,7 @@
 
   /* ---------- CONEXIÓN CON GOOGLE SHEETS (via Apps Script) ---------- */
   const API_URL = 'https://script.google.com/macros/s/AKfycbwBsz7tZzq8w015UaJdH5atoXhA9xdkfAaHynG7wbZ6Vytc3hA2RtlkGRlmUZW74hck/exec';
-  const API_TOKEN = 'regata-junin-2026-secreto';
+  const API_TOKEN = 'CFYXbCojdZGTi_IL3ceJAuiL091t0jZZ';
 
   async function apiCall(action, extra){
     extra = extra || {};
@@ -885,3 +953,5 @@
 
 })();
 </script>
+</body>
+</html>
