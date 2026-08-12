@@ -220,7 +220,7 @@
   <div id="lock-card">
     <p class="kicker">⚓ CUADERNO DE BITÁCORA</p>
     <h2>Acceso restringido</h2>
-    <p>Esta herramienta es de uso interno de COAC Agrícola Junín. Ingresa la contraseña que te compartió tu coordinador/a.</p>
+    <p>Esta herramienta es de uso interno de COAC Agrícola Junín. Ingresa la contraseña que te compartió por correo.</p>
     <input type="password" id="lock-password" placeholder="Contraseña" autocomplete="off">
     <button id="lock-submit">Entrar</button>
     <p id="lock-error">Contraseña incorrecta. Intenta de nuevo.</p>
@@ -257,7 +257,7 @@
 <script>
   /* ---------- CANDADO DE ACCESO ---------- */
   (function(){
-    const APP_PASSWORD = 'junin-regata-2026';
+    const APP_PASSWORD = 'regatajunin-2026';
     const SESSION_KEY = 'regata_unlocked_v1';
     const lockScreen = document.getElementById('lock-screen');
     if(sessionStorage.getItem(SESSION_KEY) === 'si'){
